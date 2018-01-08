@@ -137,7 +137,11 @@ kolla-ansible 默认是开启了很多openstack的服务，如果不需要，得
 所有kolla支持的部署服务见[官网](https://docs.openstack.org/kolla-ansible/latest/reference/index.html)
 
 #### ceph数据清除
+如果仅部署了ceph， 可以统统`kolla-ansible destroy` 删除
 想要重新部署ceph，需要首先删除container和所有相关的volume,并对磁盘重新进行格式化, 并删除/etc/fstabs里面的container, 删除/etc/kolla下ceph的相关配置
+```
+systemctl daemon-reload
+```
 
 ## 总结
 遇到的问题都是docker相关的以及对配置文件不熟悉，配置文件改正确之后，非常顺利的部署了allinone的环境，用作开发测试还是很值得推荐的，不需要对ceph做很多的配置工作。
