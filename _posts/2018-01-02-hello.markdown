@@ -6,10 +6,10 @@ date:       2018-01-02
 author:     "min"
 header-img: "img/post-bg-2015.jpg"
 tags:
-    - 生活
+    - 生活需要仪式感
 ---
 
-> “这就是生活 ”
+> “这就是生活”
 
 
 ## 前言
