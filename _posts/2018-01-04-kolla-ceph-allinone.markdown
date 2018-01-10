@@ -6,7 +6,7 @@ date:       2018-01-04
 author:     "min"
 header-img: "img/post-bg-2015.jpg"
 tags:
-    - kolla
+    - kolla, ceph
 ---
 # kolla部署单节点ceph
 
@@ -98,6 +98,12 @@ docker exec -it ceph_mon ceph -s
     pgs:
 ```
 
+### 查看ceph containers
+![](/img/kolla-ceph-contains.png)
+- ceph_mon: ceph monitor 服务
+- ceph_mgr: ceph manager 服务
+- ceph_osd_*: ceph osd 服务
+
 ### ceph常用命令
 ```
 docker exec -it ceph_mon ceph -s
@@ -114,16 +120,37 @@ docker exec -it ceph_mon ceph osd pool set images min_size 1
 docker exec -it ceph_mon ceph osd pool set vms min_size 1
 ```
 
-### docker 常用命令
-```
-docker images
-docker pull ${image}[:${tag}]
-
-```
 
 ## 如何在container外部使用ceph
-1. 查看ceph-mon的ceph配置文件路径
 
+- 安装ceph的cli
+- 查看ceph-mon的ceph配置文件路径
+
+```
+# docker volume ls
+DRIVER              VOLUME NAME
+local               ceph_mon
+local               ceph_mon_config
+local               kolla_logs
+
+#  docker volume inspect ceph_mon_config
+[
+    {
+        "CreatedAt": "2018-01-08T11:39:16+08:00",
+        "Driver": "local",
+        "Labels": null,
+        "Mountpoint": "/var/lib/docker/volumes/ceph_mon_config/_data",
+        "Name": "ceph_mon_config",
+        "Options": {},
+        "Scope": "local"
+    }
+]
+
+```
+- 拷贝ceph的配置文件到本地
+```
+cp -r /var/lib/docker/volumes/ceph_mon_config/_data /etc/ceph
+```
 
 ## 遇到的问题
 #### docker升级docker-ce
