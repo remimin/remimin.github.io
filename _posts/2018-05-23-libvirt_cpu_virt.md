@@ -54,6 +54,7 @@ host部分包含的:
     ```commandline
      grep 'physical id' /proc/cpuinfo | awk -F: '{print $2 | "sort -un"}'
     ```
+    
 2) 查看每个Socket有几个Processor
     ```commandline
     grep 'physical id' /proc/cpuinfo | awk -F: '{print $2}' | sort | uniq -c
@@ -127,7 +128,7 @@ Y
 ```
 虚拟机xml配置cpu mode为host-passthrough，即要将物理机CPU特性全部传给虚拟机
 ```xml
-<cpu mode='host-passthrough'/>
+&lt cpu mode='host-passthrough'\&gt
 ```
 
 ### APIC介绍
