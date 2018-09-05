@@ -1,6 +1,6 @@
 ---
 layout:     post
-title:      "CPU拓扑"
+title:      "minikube安装记录"
 subtitle:   ""
 date:       2018-07-06
 author:     "min"
@@ -67,3 +67,47 @@ ubuntu 16.04的dns解析是跳过了本地，虽然我虚拟机上直接用`ping
 `nslookup localhost`则是解析到了另外一个地址。
 一个简单的做法就是把/etc/resolve.conf里的search注释掉。
 
+```commandline
+# kubectl get namespaces
+NAME          STATUS    AGE
+default       Active    2h
+kube-public   Active    2h
+kube-system   Active    2h
+```
+
+```commandline
+# kubectl --namespace kube-system get pods
+NAME                                    READY     STATUS    RESTARTS   AGE
+etcd-minikube                           1/1       Running   0          2h
+kube-addon-manager-minikube             1/1       Running   0          2h
+kube-apiserver-minikube                 1/1       Running   0          2h
+kube-controller-manager-minikube        1/1       Running   0          2h
+kube-dns-86f4d74b45-dd7q5               3/3       Running   1          2h
+kube-proxy-jgqtf                        1/1       Running   0          2h
+kube-scheduler-minikube                 1/1       Running   0          2h
+kubernetes-dashboard-5498ccf677-47mtd   1/1       Running   0          2h
+storage-provisioner                     1/1       Running   0          2h
+```
+
+```commandline
+# kubectl config view
+apiVersion: v1
+clusters:
+- cluster:
+    certificate-authority: /root/.minikube/ca.crt
+    server: https://10.71.84.87:8443
+  name: minikube
+contexts:
+- context:
+    cluster: minikube
+    user: minikube
+  name: minikube
+current-context: minikube
+kind: Config
+preferences: {}
+users:
+- name: minikube
+  user:
+    client-certificate: /root/.minikube/client.crt
+    client-key: /root/.minikube/client.key
+```
