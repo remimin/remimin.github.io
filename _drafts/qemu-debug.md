@@ -1,14 +1,3 @@
----
-layout:     post
-title:      "Qemu调试虚拟机问题"
-subtitle:   ""
-date:       2018-05-10
-author:     "min"
-header-img: "img/post-bg-2015.jpg"
-tags:
-    - qemu, kvm, virtualization
----
-
 # Qemu调试虚拟机方法
 
 ## Qemu monitor
