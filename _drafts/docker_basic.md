@@ -1,3 +1,20 @@
+# k8s pod sandbox
+
+
+
+# Pod
+
+## Pause Pod
+
+```commandline
+# docker inspect ef71d56e5b19 |grep d27c81ab30
+        "ResolvConfPath": "/var/lib/docker/containers/d27c81ab30f6de5f19e49a34db2e885c62761007f46cf1454e854c979ee4863f/resolv.conf",
+        "HostnamePath": "/var/lib/docker/containers/d27c81ab30f6de5f19e49a34db2e885c62761007f46cf1454e854c979ee4863f/hostname",
+            "NetworkMode": "container:d27c81ab30f6de5f19e49a34db2e885c62761007f46cf1454e854c979ee4863f",
+            "IpcMode": "container:d27c81ab30f6de5f19e49a34db2e885c62761007f46cf1454e854c979ee4863f",
+                "io.kubernetes.sandbox.id": "d27c81ab30f6de5f19e49a34db2e885c62761007f46cf1454e854c979ee4863f",
+```
+
 # Storage Driver
 查看docker使用的storage driver
 

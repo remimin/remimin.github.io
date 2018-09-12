@@ -1,3 +1,13 @@
+# Qemu架构分析
+
+```commandline
+/vl.c: 最主要的模拟循环，虚拟机机器环境初始化，和CPU的执行。
+/target-arch/translate.c: 将客户机代码转化成不同架构的TCG操作码。
+/tcg/tcg.c: 主要的TCG代码。
+/tcg/arch/tcg-target.c: 将TCG代码转化生成主机代码
+/cpu-exec.c: 其中的cpu-exec()函数主要寻找下一个TB（翻译代码块），如果没找到就请求得到下一个TB，并且操作生成的代码块。
+```
+
 # Qemu调试虚拟机方法
 
 ## Qemu monitor
