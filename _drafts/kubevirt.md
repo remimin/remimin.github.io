@@ -13,7 +13,69 @@ tags:
 
 # 以容器方式运行虚拟机
 
-## kubevirt安装
+* [虚拟机与容器](#虚拟机与容器)
+* [kubevirt架构](#kubevirt架构)
+* [kubevirt安装](#kubevirt安装)
+
+
+
+## 虚拟机与容器
+
+
+
+
+## kubevirt架构
+
+Kubevirt是以k8s add-on方式，利用k8s CRD为增加资源类型`vmis`，提供VM管理
+
+- virt-api
+- virt-controller
+- virt-handler
+- virt-launcher
+
+### VMI创建flow
+
+1. client 发送创建VMI命令达到k8s API server.
+2. K8S API 创建
+
+```commandline
+Client                     K8s API     VMI CRD  Virt Controller         VMI Handler
+-------------------------- ----------- ------- ----------------------- ----------
+
+                           listen <----------- WATCH /virtualmachines
+                           listen <----------------------------------- WATCH /virtualmachines
+                                                  |                       |
+POST /virtualmachines ---> validate               |                       |
+                           create ---> VMI ---> observe --------------> observe
+                             |          |         v                       v
+                           validate <--------- POST /pods              defineVMI
+                           create       |         |                       |
+                             |          |         |                       |
+                           schedPod ---------> observe                    |
+                             |          |         v                       |
+                           validate <--------- PUT /virtualmachines       |
+                           update ---> VMI ---------------------------> observe
+                             |          |         |                    launchVMI
+                             |          |         |                       |
+                             :          :         :                       :
+                             |          |         |                       |
+DELETE /virtualmachines -> validate     |         |                       |
+                           delete ----> * ---------------------------> observe
+                             |                    |                    shutdownVMI
+                             |                    |                       |
+                             :                    :                       :
+```
+
+首先需要k8s环境，本文中使用的是`v1.11.2`版本，kubevirt选择`v0.8.0`，调用如下命令部署kubevirt
+```commandline
+$ export VERSION=v0.8.0
+$ kubectl create \
+    -f https://github.com/kubevirt/kubevirt/releases/download/$VERSION/kubevirt.yaml
+```
+kubevirt.yaml中定义了kubevirt部署及服务需要的RBAC授权定义，以及`virt-api`, `virt-controller`,
+`virt-handler`和`CRD`定义。
+
+
 
 virt-launcher调用libvirt创建虚拟机，即每个虚拟机会对应对立的libvirtd
 

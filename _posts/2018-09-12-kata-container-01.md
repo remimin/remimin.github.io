@@ -9,7 +9,8 @@ tags:
     - k8s
     - kata-container
 ---
-* [kata container](#kata-container)
+* [kata container架构](#kata-container-架构)
+*  [k8s 与kata container](#k8s-与kata-container)
     * [kata container 安装](#安装kata-container-runtime)
     * [kata container images](#准备kata-container-image)
 * [k8s本地安装](#k8s本地安装)
@@ -17,15 +18,65 @@ tags:
 * [kublet & kata-containers](#kubelet-与kata-container)
 
 
-## kata container
+# kata container 初探
 
 kata containers是由OpenStack基金会管理，但独立于OpenStack项目之外的容器项目。
 它是一个可以使用容器镜像以超轻量级虚机的形式创建容器的运行时工具。 kata containers整合了Intel的 Clear Containers 和 Hyper.sh 的 runV，
 能够支持不同平台的硬件 （x86-64，arm等），并符合OCI(Open Container Initiative)规范。
-目前项目包含几个配套组件，即Runtime，Agent， Proxy，Shim，Kernel等。目前Kata Containers的运行时还没有整合，
-即Clear containers 和 runV还是独立的。
+目前项目包含几个配套组件，即Runtime，Agent，Proxy，Shim，Kernel等。目前Kata Containers的运行时还没有整合，即Clear containers 和 runV还是独立的。
 
 ![k8s-kc](https://katacontainers.io/media/uploads/katacontainers/images/posts/kubernetesandkatacontainers.jpg)
+
+### kata container 架构
+
+kata container实质上是在虚拟机内部使用container（基于runc的实现）。
+kata-container使用虚拟化软件(qemu-lite优化过的qemu)，
+通过已经将kata-agent 安装的kernel & intrd image，启动过一个轻量级的虚拟机，
+使用nvdimm将initrd image映射到guest vm中。然后由kata-agent为container创建对应的namespace和资源。
+Guest VM作为实质上的sandbox可以完全与host kernel进行隔离。
+
+kata container 原理，如图所示。
+
+![](/img/2018-09-12/kata-arch.png)
+ 
+
+- kata-runtime：实现OCI接口，可以通过CRI-O 与kubelet对接作为k8s runtime server， containerd对接docker engine，创建运行container/pod的VM
+- kata-proxy:  每一个container都会由一个kata-proxy进程，kata-proxy负责与kata-agent通讯，当guest vm启动后，kata-agent会随之启动并使用qemu virtio serial console 进行通讯
+- kata-agent： 运行在guest vm中的进程， 主要依赖于libcontainer项目，重用了大部分的runc代码，为container创建namespace(NS, UTS, IPC and PID). 
+- kata-shim: 作为guest vm标准输入输出的接口，exec命令就是同kata-shim实现的
+
+## k8s 与kata container
+
+kata container是hypverisor container阵营的container runtime项目，支持OCI标准。k8s想要创建kata container类型
+pods需要的是cri shim即能够提供CRI的服务。k8s孵化项目CRI-O就是可以提供CRI并能够与满足OCI container runtime通讯的项目
+k8s与kata container的work flow 如下
+
+```                                                                     +-----------+
+                                +---------------+                      +--->|container  |
++---------------+               |  cri-o        |                      |    +-----------+
+|  kubelet      |               |               |     +-------------+  |
+| +-------------+ cri protobuf  +-------------+ |<--->|  container  +<-+    +-----------+
+| | grpc client |<------------->| grpc server | |     |  runtime    +<----->|container  |
+| +-------------|               +-------------+ |     +-------------+       +-----------+
++---------------+               |               |
+                                +---------------+
+```
+
+- k8s调用kubelet在node上启动一个pod，kubelet通过gRPC调用cri-o启动pod。
+- cri-o 使用`containers/image`从image registry获取image
+- 调用`containers/stroage`将image解压成root filesystems
+- cri-o根据kubelet api请求，创建OCI runtime spec文件
+- cri-o调用container runtime(runc/kata container)创建container
+- 每一个container都有一个`conmon`进程监控，用于处理container logs和exits code
+- Pod网络CNI是直接调用了`CNI plugin`
+
+
+### cri-o 架构图
+
+![](http://cri-o.io/assets/images/architecture.png)
+
+
+### 安装kata container runtime
 
 > 环境信息
 >
@@ -39,10 +90,10 @@ kata containers是由OpenStack基金会管理，但独立于OpenStack项目之�
 >
 > kubenetes: 1.10.5
 
+#### step 1: 获取源码并执行编译安装
 
-### 安装kata container runtime
+`kata-runtime kata-proxy kata-shim`
 
-获取源码并执行编译安装`kata-runtime kata-proxy kata-shim`
 ```commandline
 go get -d -u github.com/kata-containers/runtime github.com/kata-containers/proxy github.com/kata-containers/shim
 cd $GOPATH/src/github.com/kata-containers/runtime
@@ -53,7 +104,10 @@ cd ${GOPATH}/src/github.com/kata-containers/shim
 make && make install 
 ```
 
-运行`kata-check`检查环境是否满足kata container的要求，kata container要求宿主机具有硬件虚拟化的能力
+
+#### step 2: 运行`kata-check`检查环境是否满足kata container的要求
+
+kata container要求宿主机具有硬件虚拟化的能力
 
 ```commandline
 # kata-runtime kata-check
@@ -74,7 +128,7 @@ INFO[0000] System can currently create Kata Containers   name=kata-runtime pid=1
 
 ```
 
-#### qemu-lite 安装
+#### step 3: qemu-lite 安装
 
 ```commandline
 $ source /etc/os-release
@@ -83,11 +137,9 @@ $ sudo -E VERSION_ID=$VERSION_ID yum-config-manager --add-repo "http://download.
 yum -y install qemu-lite
 ```
 
-### 准备kata container image 
+#### step 4: 准备kata container image 
 
-kata container image准备工作
-
-#### initrd image
+- initrd image
 
 
 initrd(boot loader initialized RAM disk)就是由boot loader初始化时加载的ram disk。initrd是一个被压缩过的小型根目录，
@@ -96,7 +148,6 @@ initrd(boot loader initialized RAM disk)就是由boot loader初始化时加载�
 您可以在这个脚本中运行initrd中的udevd，让它来自动加载设备驱动程序以及 在/dev目录下建立必要的设备节点。在udevd自动加载磁盘驱动程序之后，
 就可以mount真正的根目录，并切换到这个根目录中。
 
-#### 步骤
 
 ```commandline
 go get github.com/kata-containers/agent github.com/kata-containers/osbuilder
@@ -110,15 +161,16 @@ image-builder-osbuilder                       latest              092d50027bf2  
 centos-rootfs-osbuilder                       latest              27375c3d3491        About an hour ago   798.9 MB
 ```
 
-#### rootfs image
+- rootfs image
 
-1. 执行rootfs生成脚本，脚本执行完成后，能看到rootfs的文件夹 rootfs_Centos
+1.  执行rootfs生成脚本，脚本执行完成后，能看到rootfs的文件夹 rootfs_Centos
 ```commandline
 cd /root/.golang/src/github.com/kata-containers/osbuilder/rootfs-builder
 export USE_DOCKER=true
 ./rootfs.sh centos
 ```
-2. 执行rootfs image build 脚本
+
+2.  执行rootfs image build 脚本
 
 ```commandline
 cd /root/.golang/src/github.com/kata-containers/osbuilder/image-builder
@@ -131,16 +183,15 @@ image_builder.sh /root/.golang/src/github.com/kata-containers/osbuilder/rootfs-b
 
 ```
 
-#### image build细节
+##### image build细节
 
 1. rootfs 生成
 
 可以通过设置环境变量`exprot DEBUG=true`执行脚本，能看到更多的细节。rootfs.sh脚本目的就是生成distributor的根文件系统
 在使用`USER_DOCKER=true`时，实际上是build一个centos-rootfs-osbuilder的docker image，然后从docker image创建一个
 container，并在container内部执行rootfs.sh的脚本，把根文件系统导出来。
-
-生成centos-root-osbuilder image如下：
-```Dockerfile
+生成centos-root-osbuilder image如下
+```
 From centos:7
 
 RUN yum -y update && yum install -y git make gcc coreutils
@@ -152,6 +203,8 @@ RUN tar -C /usr/ -xzf /tmp/go1.9.2.linux-amd64.tar.gz
 ENV GOROOT=/usr/go
 ENV PATH=$PATH:$GOROOT/bin:$GOPATH/bin
 ```
+
+创建image builder container 开始build rootfs
 ```commandline
  docker run --rm --runtime runc --env https_proxy= --env http_proxy= 
  --env AGENT_VERSION=master --env ROOTFS_DIR=/rootfs --env GO_AGENT_PKG=github.com/kata-containers/agent 
@@ -165,6 +218,7 @@ ENV PATH=$PATH:$GOROOT/bin:$GOPATH/bin
 ```
 
 2. rootfs image build
+
 创建rootfs image的过程，简单来讲就是创建了一个raw格式的image，分区，拷贝rootfs的目录到分区内，脚本里root分区的文件系统是ext4
 
 ```commandline
@@ -193,37 +247,78 @@ bash /osbuilder/image_builder.sh -o /image/kata-containers.img /rootfs
 
 TODO
 
-## k8s 与kata container
+## CRI-O安装
 
-kata container是hypverisor container阵营的container runtime项目，支持OCI标准。k8s想要创建kata container类型
-pods需要的是cri shim即能够提供CRI的服务。k8s孵化项目CRI-O就是可以提供CRI并能够与满足OCI container runtime通讯的项目
-k8s与kata container的work flow 如下
 
-```text                                                                     +-----------+
-                                +---------------+                      +--->|container  |
-+---------------+               |  cri-o        |                      |    +-----------+
-|  kubelet      |               |               |     +-------------+  |
-| +-------------+ cri protobuf  +-------------+ |<--->|  container  +<-+    +-----------+
-| | grpc client |<------------->| grpc server | |     |  runtime    +<----->|container  |
-| +-------------|               +-------------+ |     +-------------+       +-----------+
-+---------------+               |               |
-                                +---------------+
+根据CRI-O官网，匹配k8s版本，选择1.10
+
+step 1: 安装依赖包
+
+```
+yum install -y \
+  btrfs-progs-devel \
+  device-mapper-devel \
+  git \
+  glib2-devel \
+  glibc-devel \
+  glibc-static \
+  go \
+  golang-github-cpuguy83-go-md2man \
+  gpgme-devel \
+  libassuan-devel \
+  libgpg-error-devel \
+  libseccomp-devel \
+  libselinux-devel \
+  ostree-devel \
+  pkgconfig \
+  runc \
+  skopeo-containers
 ```
 
-- k8s调用kubelet在node上启动一个pod，kubelet通过gRPC调用cri-o启动pod。
-- cri-o 使用`containers/image`从image registry获取image
-- 调用`containers/stroage`将image解压成root filesystems
-- cri-o根据kubelet api请求，创建OCI runtime spec文件
-- cri-o调用container runtime(runc/kata container)创建container
-- 每一个container都有一个`conmon`进程监控，用于处理container logs和exits code
-- Pod网络CNI是直接调用了`CNI plugin`
+step 2: 现在源码切换到版本分支，并编译安装
 
-cri-o 架构图
+```commandline
+git clone https://github.com/kubernetes-incubator/cri-o 
+git checkout -b release-1.10 remotes/origin/release-1.10
+make install.tools
+make BUILDTAGS=""
+make install
+make install.config
+```
 
-![](http://cri-o.io/assets/images/architecture.png)
+step 3: cni 网络配置
+```commandline
+go get -u -d github.com/containernetworking/plugins
+cd plugins
+./build/sh
+mkdir -p /opt/cni/bin
+cp bin/* /opt/cni/bin
 
+## 添加网络配置文件
+mkdir /etc/cni/net.d
+cp $GOPATH/src/github.com/kubernetes-incubator/cri-o/contrib/* /etc/cni/net.d
 
-查看conmon进程
+## 创建cni0 bridge
+brctl addbr cni0
+```
+
+step 4: 修改`/etc/crio/crio.conf`
+```commandline
+[crio.runtime]
+manage_network_ns_lifecycle = true
+runtime = "/usr/bin/runc"
+runtime_untrusted_workload = "/usr/bin/kata-runtime"
+default_workload_trust = "untrusted"
+```
+
+step 5: 启动cri-o
+
+```commandline
+make install.systemd
+systemctl start crio
+```
+
+step 6: 查看conmon进程
 
 conmon是cri-o启动的进程，看下crio的日志，可以看到当crio接收到容器创建请求时，会启动运行conmon命令
 
@@ -256,117 +351,8 @@ conmon -c 45c1ee0637fdc33324edeb63f3b8eeaffed1e683cc1cfe9d32a45d178fbb658e -u 45
   `-{conmon}
 
 ```
-  
-  
 
-
-## k8s本地安装
-
-```commandline
-go get -d -u github.com/kubernetes/kubernetes
-```
-
-```commandline
-cluster/kubectl.sh get pods
-cluster/kubectl.sh get services
-
-cluster/kubectl.sh run my-nginx --image=nginx --replicas=1 --port=80
-
-# 查看kubernetes相关信息
-cluster/kubectl.sh get pods
-cluster/kubectl.sh get services
-```
-
-
-#### 
-
-
-| | Alpine | CentOS | ClearLinux | EulerOS | Fedora |
-  |--|--|--|--|--|--|
-  | **ARM64** | :heavy_check_mark: | :heavy_check_mark: |  | :heavy_check_mark: | :heavy_check_mark: |
-  | **PPC64le** | :heavy_check_mark: | :heavy_check_mark: |  |  | :heavy_check_mark: |
-  | **x86_64** | :heavy_check_mark: |:heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: |
-
-
-
-
-问题记录
-
-```commandline
-/usr/bin/docker-current: Error response from daemon: shim error: docker-runc not installed on system.
-[root@bm48 ~]# locate docker-runc
-/usr/libexec/docker/docker-runc-current
-[root@bm48 ~]# ln -s /usr/libexec/docker/docker-runc-current /usr/libexec/docker/docker-runc
-
-```
-
-## CRI-O安装
-
-匹配k8s版本，选择1.10,安装依赖包
-```
-yum install -y \
-  btrfs-progs-devel \
-  device-mapper-devel \
-  git \
-  glib2-devel \
-  glibc-devel \
-  glibc-static \
-  go \
-  golang-github-cpuguy83-go-md2man \
-  gpgme-devel \
-  libassuan-devel \
-  libgpg-error-devel \
-  libseccomp-devel \
-  libselinux-devel \
-  ostree-devel \
-  pkgconfig \
-  runc \
-  skopeo-containers
-```
-现在源码切换到版本分支，并编译安装
-
-```commandline
-git clone https://github.com/kubernetes-incubator/cri-o 
-git checkout -b release-1.10 remotes/origin/release-1.10
-make install.tools
-make BUILDTAGS=""
-make install
-make install.config
-```
-
-cni 网络配置
-```commandline
-go get -u -d github.com/containernetworking/plugins
-cd plugins
-./build/sh
-mkdir -p /opt/cni/bin
-cp bin/* /opt/cni/bin
-
-## 添加网络配置文件
-mkdir /etc/cni/net.d
-cp $GOPATH/src/github.com/kubernetes-incubator/cri-o/contrib/* /etc/cni/net.d
-
-## 创建cni0 bridge
-brctl addbr cni0
-```
-
-修改`/etc/crio/crio.conf`
-```commandline
-[crio.runtime]
-manage_network_ns_lifecycle = true
-runtime = "/usr/bin/runc"
-runtime_untrusted_workload = "/usr/bin/kata-runtime"
-default_workload_trust = "untrusted"
-```
-
-启动cri-o
-
-```commandline
-make install.systemd
-systemctl start crio
-```
-
-修改k8s环境变量，并重启k8s cluster
+step 7: 修改k8s环境变量，并重启k8s cluster
 
 ```commandline
 CGROUP_DRIVER=systemd \
@@ -374,7 +360,7 @@ CONTAINER_RUNTIME=remote \
 CONTAINER_RUNTIME_ENDPOINT='unix:///var/run/crio/crio.sock  --runtime-request-timeout=15m' \
 ./hack/local-up-cluster.sh
 ```
-查看k8s服务状态
+step 8: 查看k8s服务状态
 
 ```commandline
  cluster/kubectl.sh get cs
@@ -385,7 +371,7 @@ etcd-0               Healthy   {"health": "true"}
 
 ```
 
-创建测试pods
+step 9: 创建测试pods
 ```commandline
 cat >ngnix_untrusted.yam <<EON
 
@@ -420,20 +406,59 @@ ID                                                                 PID         S
 edff5f14efc36145ef29853064fafbb2d1e60c7127e5e62160457d7ebf362a6b   38346       running     /run/containers/storage/overlay-containers/edff5f14efc36145ef29853064fafbb2d1e60c7127e5e62160457d7ebf362a6b/userdata   2018-07-24T08:32:40.246491549Z   #0
 0b530a50d5a353ef9f61e18b16c412fadf0fe98f82766f9f9678add7ede49d25   38543       running     /run/containers/storage/overlay-containers/0b530a50d5a353ef9f61e18b16c412fadf0fe98f82766f9f9678add7ede49d25/userdata   2018-07-24T08:33:21.832878116Z   #0
 
-
-
 # df 
 overlay                 241963588 33358740 208604848  14% /var/lib/containers/storage/overlay/1953579948b2a51cc93709ee96770496599e54f5f2cde525cc7138861a294495/merged
 overlay                 241963588 33358740 208604848  14% /var/lib/containers/storage/overlay/93e320ca6218832f69984481a9ae945a2508b73ed4e3a17a69d0ee2a1aa54564/merged
 
 ````
 
-
-
 ### runc 
 
 runc是docker贡献出来支持OCI的容器运行时项目，其实际上是在libcontainerd上封装了一层用于支持OCI，并提供CLI可以通过
 [runtime spec](https://github.com/opencontainers/runtime-spec)运行容器。
+
+
+## k8s本地安装
+
+k8s安装除了使用官方提供的minikube, kubeadm工具外，kubernetes源码也提供了简单的脚本安装方法
+
+
+```commandline
+go get -d -u github.com/kubernetes/kubernetes
+bash -x hack/local-up-cluster.sh
+
+# 查看kubernetes相关信息
+cluster/kubectl.sh get pods
+cluster/kubectl.sh get services
+cluster/kubectl.sh get pods
+cluster/kubectl.sh get services
+cluster/kubectl.sh run my-nginx --image=nginx --replicas=1 --port=80
+```
+
+
+#### 
+
+
+| | Alpine | CentOS | ClearLinux | EulerOS | Fedora |
+  |--|--|--|--|--|--|
+  | **ARM64** | :heavy_check_mark: | :heavy_check_mark: |  | :heavy_check_mark: | :heavy_check_mark: |
+  | **PPC64le** | :heavy_check_mark: | :heavy_check_mark: |  |  | :heavy_check_mark: |
+  | **x86_64** | :heavy_check_mark: |:heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: |
+
+
+
+
+问题记录
+
+```commandline
+/usr/bin/docker-current: Error response from daemon: shim error: docker-runc not installed on system.
+[root@bm48 ~]# locate docker-runc
+/usr/libexec/docker/docker-runc-current
+[root@bm48 ~]# ln -s /usr/libexec/docker/docker-runc-current /usr/libexec/docker/docker-runc
+
+```
+
+
 
 
 ## 问题记录
