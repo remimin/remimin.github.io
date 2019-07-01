@@ -6,7 +6,9 @@ date:       2018-05-11
 author:     "min"
 header-img: "img/post-bg-2015.jpg"
 tags:
-    - kvm, virtualization, qga
+    - kvm
+    - virtualization
+    - qga
 ---
 
 # Linux vhost介绍
@@ -150,3 +152,8 @@ signal.
 的交互只有一次用户态的切换以及数据拷贝。这个方案对于不同 host 之间的通信，或者 guest 到 host nic 之间的通信是比较好的，但是对于某些用户态进程间的通信，
 比如数据面的通信方案，openvswitch 和与之类似的 SDN 的解决方案，guest 需要和 host 用户态的 vswitch 进行数据交换，如果采用 vhost 的方案，
 guest 和 host 之间又存在多次的上下文切换和数据拷贝，为了避免这种情况，业界就想出将 vhost 从内核态移到用户态。这就是 vhost-user 的实现。
+
+qemu-ga cmd
+
+## 获取支持的命令
+`virsh qemu-agent-command instance-000000e9 --cmd '{"execute":"guest-info"}'`

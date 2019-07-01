@@ -120,12 +120,26 @@ Features是用于判断是否兼容的关键，当虚拟机想要迁移到其他
 1. 打开kvm内核模块nested特性
 `modprobe kvm-intel nested=1`
 或者修改modprobe.d 编辑`/etc/modprobe.d/kvm_mod.conf`，添加以下内容
-`options kvm-intel nested=y`
+```
+options kvm-intel nested=1
+options kvm-intel enable_shadow_vmcs=1
+options kvm-intel enable_apicv=1
+options kvm-intel ept=1
+```
+
+```commandline
+modprobe -r kvm-intel
+modprobe -a kvm-intel
+```
+
 检查是否打开nested功能
 ```
 $ cat /sys/module/kvm_intel/parameters/nested 
 Y
 ```
+
+
+
 虚拟机xml配置cpu mode为host-passthrough，即要将物理机CPU特性全部传给虚拟机
 ```xml
 &lt cpu mode='host-passthrough'\&gt

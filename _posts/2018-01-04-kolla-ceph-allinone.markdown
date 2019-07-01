@@ -6,7 +6,8 @@ date:       2018-01-04
 author:     "min"
 header-img: "img/post-bg-2015.jpg"
 tags:
-    - kolla, ceph
+    - kolla
+    - ceph
 ---
 # kolla部署单节点ceph
 

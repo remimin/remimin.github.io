@@ -25,6 +25,14 @@ Qemu创建虚拟机实例，可以通过```-mon```指定设备作为monitor，�
 
 Qemu Tracing机制对于debug调试虚拟机来讲是比较有用的机制。
 
+#!/bin/bash -x
+virsh qemu-monitor-command ${1}  --hmp trace-event qio_channel_socket_connect_fail on
+virsh qemu-monitor-command ${1}  --hmp trace-event qio_channel_socket_connect_async on
+virsh qemu-monitor-command ${1}  --hmp trace-event qio_channel_socket_connect_sync on
+virsh qemu-monitor-command ${1}  --hmp trace-event qio_channel_socket_new on
+virsh qemu-monitor-command ${1}  --hmp trace-event qio_channel_socket_new_fd on
+virsh qemu-monitor-command ${1}  --hmp trace-event qio_channel_socket_connect_complete on
+
 
 =======
 
@@ -77,5 +85,3 @@ cat /proc/cpuinfo |egrep "vmx|svm"
 参考链接
 
   - https://libvirt.org/guide/html/Application_Development_Guide-Connections-Debug.html
-  
->>>>>>> Stashed changes
