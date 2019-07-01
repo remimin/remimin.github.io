@@ -6,7 +6,8 @@ date:       2018-05-23
 author:     "min"
 header-img: "img/post-bg-2015.jpg"
 tags:
-    - kvm, virtualization
+    - kvm
+    - virtualization
 ---
 # KVM虚拟化之host capability
 
