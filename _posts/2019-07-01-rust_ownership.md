@@ -1,7 +1,6 @@
 ---
 layout:     post
 title:      "Rust学习之理解Ownership"
-subtitle:   " \"Hello World, Hello Blog\""
 date:       2019-07-01
 author:     "min"
 header-img: "img/post-bg-2015.jpg"
