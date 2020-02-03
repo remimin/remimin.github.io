@@ -82,4 +82,4 @@ featured-condition-size: 1              # A tag will be featured if the size of 
 friends: [
     ]
 
-theme: jekyll-theme-modernist
+theme: jekyll-theme-leap-day
